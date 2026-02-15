@@ -162,15 +162,16 @@ This module simulates courier workload distribution and recommends staffing adju
 
 | Function | Description |
 |----------|-------------|
-| `simulate_courier_load(df)` | Groups by `delivery_partner_id` and computes: total deliveries, average delay (minutes), on-time rate (%), and average distance. Sorted by total deliveries descending. |
-| `identify_overloaded_couriers(stats, threshold)` | Filters couriers whose total deliveries exceed the threshold (default: 20). |
-| `simulate_load_redistribution(df, threshold)` | Simulates reassigning 20% of orders from overloaded couriers to underloaded ones. Assumes a 15% delay improvement per redistributed batch. Returns before/after average delay and improvement percentage. |
+| `compute_zone_performance(df)` | Groups by `area` (courier zone) and computes: total deliveries, average delay (minutes), on-time rate (%), average distance, average order total, and average rating. Sorted by on-time rate ascending. |
+| `identify_overloaded_zones(zone_stats, threshold)` | Filters zones with on-time rate below the given threshold (default: 50%). |
+| `simulate_load_redistribution(df)` | Identifies zones with above-average delay and simulates shifting 20% of their orders to lower-delay zones. Estimates the fleet-wide delay improvement. |
 | `compute_peak_hour_analysis(df)` | Computes order count, average delay, unique couriers, and **utilization** (orders per courier) for each hour of the day. |
 | `recommend_staffing(peak_df)` | Identifies the 5 most stressed hours using a **stress score** = utilization × average delay. Recommends extra couriers needed (assuming ≤ 10 orders per courier per hour) and estimates the expected delay reduction in minutes. |
 
 **Redistribution logic:**
-- Orders from couriers with > 20 deliveries are partially reassigned (20% of their volume).
-- The simulation assumes each redistributed batch yields a 15% delay improvement.
+- Zones with above-average delay are identified as "high-delay zones".
+- 20% of their order volume is simulated as redistributed to lower-delay zones.
+- Redistributed orders are assumed to achieve the average delay of the low-delay zones.
 - This is a heuristic simulation — real-world redistribution would require route-level optimisation.
 
 ---
@@ -212,11 +213,11 @@ The Streamlit dashboard is a single-file application with 6 pages accessible via
 - **KPI Row 2 (4 metrics):** Total Revenue ($), Average Order Value ($), Average Distance (km), Unique Customers.
 - **Left Column Charts:**
   - *Delivery Status Distribution* — Pie chart showing the proportion of On Time, Slightly Delayed, and Significantly Delayed orders.
-  - *On-Time Rate by Customer Segment* — Bar chart comparing on-time performance across New, Regular, Premium, and Inactive customers.
+  - *Rating Distribution (1–5 Stars)* — Bar chart showing the count of orders at each star rating level.
   - *Distribution of Delivery Time* — Histogram of `delivery_time_minutes` with a red dashed line at 0 (on-time threshold).
 - **Right Column Charts:**
   - *Average Delay by Hour of Day* — Bar chart revealing which hours have the highest average delay.
-  - *Order Count by Payment Method & Sentiment* — Grouped bar chart showing order volume by payment type, coloured by customer sentiment.
+  - *Order Count by Day of Week* — Bar chart showing order volume across Mon–Sun.
   - *Daily Order Volume* — Line chart showing order trends over time.
 
 ---
@@ -255,15 +256,16 @@ The Streamlit dashboard is a single-file application with 6 pages accessible via
 
 ### Page 4 — Courier & Staffing
 
-**Purpose:** Analyse courier workloads, simulate load redistribution, and recommend staffing levels for peak hours.
+**Purpose:** Analyse courier zone performance, simulate zone-to-zone load redistribution, and visualise peak-hour stress.
 
 **Contents:**
-- **Courier Performance Table** — Top 50 couriers by total deliveries, showing average delay, on-time rate, and average distance. Overloaded couriers (> 20 deliveries) are highlighted in red.
-- **Top 20 Couriers by Avg Delay** — Bar chart of the worst-performing couriers by average delay.
-- **Load Redistribution Simulation** — Displays before/after average delay and improvement percentage if 20% of overloaded orders were redistributed. Shows the number of orders that would be reassigned.
+- **Courier Zone Performance Table** — All 316 zones with total deliveries, avg delay, on-time rate, avg distance, avg order total, avg rating, and a status indicator (🔴 Critical < 50%, 🟡 Warning < 70%, 🟢 Good).
+- **15 Worst Zones — Lowest On-Time Rate** — Red-scaled bar chart of zones with the poorest on-time performance.
+- **15 Worst Zones — Highest Avg Delay** — Red-scaled bar chart of zones with the longest average delays.
+- **On-Time Rate vs Avg Distance by Zone** — Bubble scatter chart (size = order count, colour = avg delay) showing the relationship between delivery distance and on-time performance.
+- **Zone Load Redistribution Simulation** — Before/after average delay metrics if 20% of high-delay zone orders were shifted to lower-delay zones, plus the number of zones and orders involved.
 - **Peak Hour Staffing Analysis:**
   - *Dual-axis chart* — Order volume (bars) and average delay (line) by hour of day, revealing when the system is most stressed.
-  - *Staffing Recommendations Table* — For the 5 most stressed hours, shows current couriers, recommended additional couriers, and expected delay reduction in minutes.
 
 ---
 
@@ -284,17 +286,17 @@ The Streamlit dashboard is a single-file application with 6 pages accessible via
 
 ### Page 6 — Customer Feedback
 
-**Purpose:** Analyse customer satisfaction patterns across segments, areas, and time.
+**Purpose:** Analyse customer satisfaction patterns and their relationship with delivery performance.
 
 **Contents:**
 - **Left Column:**
-  - *Sentiment Distribution* — Bar chart showing counts of Positive, Neutral, and Negative feedback.
-  - *Sentiment by Customer Segment* — Grouped bar chart breaking down sentiment by New, Regular, Premium, and Inactive customers.
+  - *Customer Rating Distribution* — Bar chart showing the count of orders at each star level (1–5).
+  - *Avg Rating by Delivery Status* — Bar chart showing a strong signal: On Time ≈ 4.5★, Slightly Delayed ≈ 3.5★, Significantly Delayed ≈ 2.0★.
   - *Top 10 Lowest-Rated Areas (≥ 50 orders)* — Table of areas with the worst average rating (filtered to areas with sufficient data).
 - **Right Column:**
-  - *Avg Rating by Feedback Category* — Bar chart showing how different feedback topics (food quality, delivery speed, etc.) correlate with ratings.
-  - *Monthly Average Rating Trend* — Line chart tracking customer satisfaction over time.
-  - *Order Total vs Rating* — Scatter plot (5,000 sampled points) coloured by delivery status, showing whether higher-value orders receive better/worse ratings.
+  - *Rating Breakdown by Delivery Status* — Grouped bar chart showing the distribution of each star rating across delivery status categories.
+  - *Delivery Time Distribution by Rating* — Box plot revealing how delivery delay distributions differ across star ratings.
+  - *Top 15 Areas — Highest % of Low Ratings (1–2 Stars)* — Bar chart of areas with the most dissatisfied customers (≥ 50 orders).
 
 ---
 
